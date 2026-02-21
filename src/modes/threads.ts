@@ -36,14 +36,21 @@ export async function handleThreads(api: HeartbeatAPI, params: ToolParams): Prom
   }
 
   const channelID = await resolveChannel(api, params.channel);
-  const threads = await api.get<HBThread[]>(`/channels/${channelID}/threads`);
+  const allThreads = await api.get<HBThread[]>(`/channels/${channelID}/threads`);
   const userMap = await buildUserMap(api);
+
+  const offset = params.offset ?? 0;
+  const limit = params.limit ?? 20;
+  const page = allThreads.slice(offset, offset + limit);
 
   return JSON.stringify({
     channel: params.channel,
     channel_id: channelID,
-    count: threads.length,
-    threads: threads.map((t) => ({
+    total: allThreads.length,
+    offset,
+    limit,
+    count: page.length,
+    threads: page.map((t) => ({
       id: t.id,
       author: userMap.get(t.userID) ?? t.userID,
       preview: stripHtml(t.text),

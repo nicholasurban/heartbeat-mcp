@@ -32,20 +32,31 @@ export class HeartbeatAPI {
     const cached = this.cache.get(key);
     if (cached && cached.expires > Date.now()) return cached.data as T;
 
+    // Lazy eviction: prune expired entries when cache grows large
+    if (this.cache.size > 1000) {
+      const now = Date.now();
+      for (const [k, v] of this.cache) {
+        if (v.expires <= now) this.cache.delete(k);
+      }
+    }
+
     const res = await this.request<T>("GET", path, undefined, params);
     this.cache.set(key, { data: res, expires: Date.now() + this.cacheTTL });
     return res;
   }
 
   async put<T>(path: string, data?: unknown): Promise<T> {
+    this.cache.clear();
     return this.request<T>("PUT", path, data);
   }
 
   async post<T>(path: string, data?: unknown): Promise<T> {
+    this.cache.clear();
     return this.request<T>("POST", path, data);
   }
 
   async delete<T>(path: string): Promise<T> {
+    this.cache.clear();
     return this.request<T>("DELETE", path);
   }
 

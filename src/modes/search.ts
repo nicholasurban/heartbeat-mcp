@@ -56,11 +56,13 @@ export async function handleSearch(api: HeartbeatAPI, params: ToolParams): Promi
   if (resourcesToSearch.includes("documents")) {
     fetches.push(
       api.get<Array<Record<string, unknown>>>("/documents").then((docs) => {
+        // FIX 9: also search document content field
         results.documents = docs
           .filter(
             (d) =>
               (d.title as string | undefined)?.toLowerCase().includes(q) ||
-              (d.description as string | undefined)?.toLowerCase().includes(q),
+              (d.description as string | undefined)?.toLowerCase().includes(q) ||
+              (d.content as string | undefined)?.toLowerCase().includes(q),
           )
           .slice(0, limit)
           .map((d) => ({ id: d.id, title: d.title, description: d.description }));

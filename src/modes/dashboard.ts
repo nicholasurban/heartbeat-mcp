@@ -26,6 +26,19 @@ export async function handleDashboard(api: HeartbeatAPI, params: ToolParams): Pr
 
   const userMap = new Map(users.map((u) => [u.id, u.name]));
 
+  // Build set of users with recent thread activity (last 30 days)
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recentThreadAuthors = new Set<string>();
+  const allThreadAuthors = new Set<string>();
+  for (const ct of channelThreads) {
+    for (const t of ct.threads) {
+      allThreadAuthors.add(t.userID);
+      if (new Date(t.createdAt).getTime() > thirtyDaysAgo) {
+        recentThreadAuthors.add(t.userID);
+      }
+    }
+  }
+
   // Build needs_attention
   const needsAttention: Array<Record<string, unknown>> = [];
 
@@ -62,11 +75,38 @@ export async function handleDashboard(api: HeartbeatAPI, params: ToolParams): Pr
     });
   }
 
+  // 3. FIX 7: at_risk members — had some past activity but no recent threads
+  const atRiskMembers: Array<Record<string, unknown>> = [];
+  for (const u of users) {
+    const lessonsCount = u.completedLessons?.length ?? 0;
+    const hasRecentThreads = recentThreadAuthors.has(u.id);
+    const hasAnyThreads = allThreadAuthors.has(u.id);
+    // At risk: completed lessons or authored threads in the past, but no recent thread activity
+    if ((lessonsCount > 0 || hasAnyThreads) && !hasRecentThreads) {
+      atRiskMembers.push({
+        type: "at_risk",
+        name: u.name,
+        email: u.email,
+        lessons_completed: lessonsCount,
+        had_thread_activity: hasAnyThreads,
+        user_id: u.id,
+      });
+    }
+  }
+  // Add top at-risk members to needs_attention
+  for (const m of atRiskMembers.slice(0, 5)) {
+    needsAttention.push(m);
+  }
+
   // Upcoming events (future events sorted by start time)
+  // FIX 6: include RSVP note
   const now = Date.now();
   const upcomingEvents = events
     .filter((e) => new Date(e.startTime as string).getTime() > now)
-    .sort((a, b) => new Date(a.startTime as string).getTime() - new Date(b.startTime as string).getTime())
+    .sort(
+      (a, b) =>
+        new Date(a.startTime as string).getTime() - new Date(b.startTime as string).getTime(),
+    )
     .slice(0, 5);
 
   // Recent activity (most recent threads across all channels)
@@ -79,12 +119,13 @@ export async function handleDashboard(api: HeartbeatAPI, params: ToolParams): Pr
     summary: {
       total_members: users.length,
       new_members: newMembers.length,
+      at_risk_members: atRiskMembers.length,
       active_channels: channels.length,
       upcoming_events: upcomingEvents.length,
       courses_available: courses.length,
       total_recent_threads: allThreads.length,
     },
-    needs_attention: needsAttention.slice(0, 10),
+    needs_attention: needsAttention.slice(0, 15),
     recent_activity: allThreads.map((t) => ({
       channel: t.channelName,
       author: userMap.get(t.userID) ?? t.userID,
@@ -97,6 +138,9 @@ export async function handleDashboard(api: HeartbeatAPI, params: ToolParams): Pr
       start: e.startTime,
       duration: e.duration,
       location: e.location,
+      invited_users_count: (e.invitedUsers as string[] | undefined)?.length ?? null,
+      invited_groups_count: (e.invitedGroups as string[] | undefined)?.length ?? null,
+      rsvp_note: "Full RSVP data requires per-event attendance fetch (mode: events, action: attendance)",
     })),
     notifications: (notifications as unknown[]).slice(0, 5),
   };

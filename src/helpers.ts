@@ -117,24 +117,25 @@ export async function buildUserMap(api: HeartbeatAPI): Promise<Map<string, strin
 
 /**
  * Summarize a user for compact display.
- * detail="summary" returns id, name, email, groups count, lessons_completed count.
- * detail="full" adds bio, status, roleID, groupIDs, social links.
+ * detail="summary" returns id, name, email, role, groups count, status, lessons_completed count.
+ * detail="full" adds bio, groupIDs, social links, profilePicture.
  */
 export function summarizeUser(
   user: HBUser,
   detail: "summary" | "full" = "summary",
 ): Record<string, unknown> {
+  // FIX 8: summary now includes roleID and status per spec
   const base: Record<string, unknown> = {
     id: user.id,
     name: user.name,
     email: user.email,
+    roleID: user.roleID,
+    status: user.status || "",
     groups: user.groupIDs?.length ?? 0,
     lessons_completed: user.completedLessons?.length ?? 0,
   };
   if (detail === "full") {
     base.bio = user.bio || "";
-    base.status = user.status || "";
-    base.roleID = user.roleID;
     base.groupIDs = user.groupIDs;
     base.profilePicture = user.profilePicture || "";
     base.linkedin = user.linkedin || "";

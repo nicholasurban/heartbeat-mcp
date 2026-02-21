@@ -28,9 +28,37 @@ async function main(): Promise<void> {
     },
   );
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Heartbeat MCP server running via stdio");
+  const PORT = process.env.PORT ? Number(process.env.PORT) : null;
+
+  if (PORT) {
+    const express = (await import("express")).default;
+    const { StreamableHTTPServerTransport } = await import(
+      "@modelcontextprotocol/sdk/server/streamableHttp.js"
+    );
+
+    const app = express();
+    app.use(express.json());
+
+    app.post("/mcp", async (req, res) => {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+      res.on("close", () => transport.close());
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    });
+
+    app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+    app.listen(PORT, () => {
+      console.error(`Heartbeat MCP server running on http://0.0.0.0:${PORT}/mcp`);
+    });
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Heartbeat MCP server running via stdio");
+  }
 }
 
 main().catch((err) => {

@@ -39,7 +39,18 @@ async function main(): Promise<void> {
     const app = express();
     app.use(express.json());
 
+    const mcpAuthToken = process.env.MCP_AUTH_TOKEN;
+    if (!mcpAuthToken) {
+      console.error("ERROR: MCP_AUTH_TOKEN environment variable is required for HTTP transport");
+      process.exit(1);
+    }
+
     app.post("/mcp", async (req, res) => {
+      const auth = req.headers.authorization;
+      if (!auth || auth !== `Bearer ${mcpAuthToken}`) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
